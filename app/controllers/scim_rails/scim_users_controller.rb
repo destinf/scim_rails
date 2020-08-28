@@ -27,8 +27,15 @@ module ScimRails
     end
 
     def create
+      binding.pry
       if ScimRails.config.scim_user_prevent_update_on_create
-        user = @company.public_send(ScimRails.config.scim_users_scope).create!(permitted_user_params)
+        user_params = permitted_user_params.reject {|k,v| v.class == Hash}
+        user = @company.public_send(ScimRails.config.scim_users_scope).create!(user_params)
+        associated_params = permitted_user_params.select {|k,v| v.class == Hash}
+        associated_params.each do |assocation, param|
+          create_association!(user, association, param)
+        end
+        # user = create_association!(@company, ScimRails.config.scim_users_scope, permitted_user_params)
       else
         username_key = ScimRails.config.queryable_user_attributes[:userName]
         find_by_username = Hash.new
@@ -36,7 +43,8 @@ module ScimRails
         user = @company
           .public_send(ScimRails.config.scim_users_scope)
           .find_or_create_by(find_by_username)
-        user.update!(permitted_user_params)
+        # user.update!(permitted_user_params)
+        update_association!(user, permitted_user_params)
       end
       update_status(user) unless put_active_param.nil?
       json_scim_response(object: user, status: :created)
@@ -50,7 +58,9 @@ module ScimRails
     def put_update
       user = @company.public_send(ScimRails.config.scim_users_scope).find(params[:id])
       update_status(user) unless put_active_param.nil?
-      user.update!(permitted_user_params)
+      ActiveRecord::Base.transaction do
+        update_association!(user, permitted_user_params)
+      end
       json_scim_response(object: user)
     end
 
@@ -64,9 +74,51 @@ module ScimRails
 
     private
 
+    def create_association!(association, key, params)
+      association.send('build_' + key.to_s)
+      direct_attributes = params.reject {|param| param.class == Hash }
+      association_attributes = params.select {|param| param.class == Hash }
+      association.save!(direct_attributes)
+      association_attributes.each do |association_key, association_value|
+        create_association!(association, association_key, association_value)
+      end
+    end
+
+    def update_association!(association, params)
+      direct_attributes = {}
+      params.each do |key, value|
+        case value
+        when Hash
+          new_association = association.send(key)
+          if new_association
+            update_association!(new_association, value)
+          else
+            create_association!(association, key, value)
+          end
+        else
+          direct_attributes[key] = value
+        end
+      end
+      association.update!(direct_attributes)
+    end
+
+    def attribute_array_to_hash(array, value)
+      return {} if array.empty?
+      result = value
+      array.reverse.each do |e|
+        result = Hash[e, result]
+      end
+      result
+    end
+
     def permitted_user_params
       ScimRails.config.mutable_user_attributes.each.with_object({}) do |attribute, hash|
-        hash[attribute] = find_value_for(attribute)
+        case attribute
+        when Array
+          hash.deep_merge!(attribute_array_to_hash(attribute, find_value_for(attribute)))
+        else
+          hash[attribute] = find_value_for(attribute)
+        end
       end
     end
 
