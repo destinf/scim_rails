@@ -1,5 +1,6 @@
 class User < ApplicationRecord
   belongs_to :company
+  has_many :groups
 
   validates \
     :first_name,

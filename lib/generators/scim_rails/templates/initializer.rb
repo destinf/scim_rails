@@ -105,4 +105,16 @@ ScimRails.configure do |config|
     ],
     active: :active?
   }
+
+  config.group_schema = {
+    schemas: ["urn:ietf:params:scim:schemas:core:2.0:Group"],
+    id: :id,
+    displayName: :name,
+    members: [
+      {
+        type: "Group",
+        value: :id
+      }
+    ]
+  }
 end

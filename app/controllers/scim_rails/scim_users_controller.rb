@@ -1,5 +1,7 @@
 module ScimRails
   class ScimUsersController < ScimRails::ApplicationController
+    SCHEMA = ScimRails.config.user_schema
+
     def index
       if params[:filter].present?
         query = ScimRails::ScimQueryParser.new(params[:filter])
