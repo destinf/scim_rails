@@ -1,9 +1,10 @@
 module ScimRails
   class ScimQueryParser
-    attr_accessor :query_elements
+    attr_accessor :query_elements, :query_attributes
 
-    def initialize(query_string)
+    def initialize(query_string, query_attributes)
       self.query_elements = query_string.split(" ")
+      self.query_attributes = query_attributes
     end
 
     def attribute
@@ -29,7 +30,9 @@ module ScimRails
     private
 
     def attribute_mapping(attribute)
-      ScimRails.config.queryable_user_attributes[attribute]
+      # binding.pry
+      # ScimRails.config.queryable_user_attributes[attribute]
+      query_attributes[attribute]
     end
 
     def sql_comparison_operator(element)

@@ -13,6 +13,9 @@ ScimRails.configure do |config|
 
   # Model used for user records.
   config.scim_users_model = "User"
+  
+  # Model used for group records.
+  # config.scim_groups_model = "Group"
 
   # Method used for retrieving user records from the
   # authenticatable model.
@@ -56,6 +59,10 @@ ScimRails.configure do |config|
     familyName: :last_name,
     email: :email
   }
+
+  # config.queryable_group_attributes = {
+  #   displayName: :name
+  # }
 
   # Array of attributes that can be modified on the
   # user model. If the attribute is not in this array

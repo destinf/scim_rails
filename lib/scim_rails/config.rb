@@ -18,7 +18,8 @@ module ScimRails
     attr_writer \
       :basic_auth_model,
       :mutable_user_attributes_schema,
-      :scim_users_model
+      :scim_users_model,
+      :scim_groups_model
 
     attr_accessor \
       :basic_auth_model_authenticatable_attribute,
@@ -27,6 +28,7 @@ module ScimRails
       :mutable_user_attributes,
       :on_error,
       :queryable_user_attributes,
+      :queryable_group_attributes,
       :scim_groups_list_order,
       :scim_groups_scope,
       :scim_users_list_order,
@@ -43,6 +45,7 @@ module ScimRails
       @basic_auth_model = "Company"
       @scim_users_list_order = :id
       @scim_users_model = "User"
+      @scim_groups_model = nil
       @signing_algorithm = ALGO_NONE
       @user_schema = {}
       @group_schema = {}
@@ -59,6 +62,10 @@ module ScimRails
 
     def scim_users_model
       @scim_users_model.constantize
+    end
+
+    def scim_groups_model
+      @scim_groups_model.constantize
     end
   end
 end

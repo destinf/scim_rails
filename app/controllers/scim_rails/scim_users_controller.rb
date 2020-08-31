@@ -4,7 +4,7 @@ module ScimRails
 
     def index
       if params[:filter].present?
-        query = ScimRails::ScimQueryParser.new(params[:filter])
+        query = ScimRails::ScimQueryParser.new(params[:filter], ScimRails.config.queryable_user_attributes)
 
         users = @company
           .public_send(ScimRails.config.scim_users_scope)
