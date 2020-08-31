@@ -23,9 +23,12 @@ module ScimRails
     attr_accessor \
       :basic_auth_model_authenticatable_attribute,
       :basic_auth_model_searchable_attribute,
+      :group_schema,
       :mutable_user_attributes,
       :on_error,
       :queryable_user_attributes,
+      :scim_groups_list_order,
+      :scim_groups_scope,
       :scim_users_list_order,
       :scim_users_scope,
       :scim_user_prevent_update_on_create,
@@ -42,6 +45,7 @@ module ScimRails
       @scim_users_model = "User"
       @signing_algorithm = ALGO_NONE
       @user_schema = {}
+      @group_schema = {}
       @user_attributes = []
     end
 
