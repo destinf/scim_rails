@@ -4,6 +4,7 @@
 ScimRails.configure do |config|
   config.basic_auth_model = "Company"
   config.scim_users_model = "User"
+  config.scim_groups_model = "Group"
 
   config.basic_auth_model_searchable_attribute = :subdomain
   config.basic_auth_model_authenticatable_attribute = :api_token
@@ -28,6 +29,10 @@ ScimRails.configure do |config|
     givenName: :first_name,
     familyName: :last_name,
     email: :email
+  }
+
+  config.queryable_group_attributes = {
+    displayName: :name
   }
 
   config.mutable_user_attributes_schema = {
