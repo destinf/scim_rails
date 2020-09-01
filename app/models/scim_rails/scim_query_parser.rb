@@ -30,8 +30,6 @@ module ScimRails
     private
 
     def attribute_mapping(attribute)
-      # binding.pry
-      # ScimRails.config.queryable_user_attributes[attribute]
       query_attributes[attribute]
     end
 

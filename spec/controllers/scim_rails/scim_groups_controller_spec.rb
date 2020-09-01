@@ -192,7 +192,116 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
       end
     end
   end
-  describe "create"
+
+  describe "create" do
+    let(:company) { create(:company) }
+
+    context "when unauthorized" do
+      it "returns scim+json content type" do
+        post :create, as: :json
+
+        expect(response.media_type).to eq "application/scim+json"
+      end
+
+      it "fails with no credentials" do
+        post :create, as: :json
+
+        expect(response.status).to eq 401
+      end
+
+      it "fails with invalid credentials" do
+        request.env['HTTP_AUTHORIZATION'] = ActionController::HttpAuthentication::Basic.encode_credentials("unauthorized","123456")
+
+        post :create, as: :json
+
+        expect(response.status).to eq 401
+      end
+    end
+
+    context "when authorized" do
+      before :each do
+        http_login(company)
+      end
+
+      it "returns scim+json content type" do
+        post :create, params: {
+          displayName: "NewGroup"
+        }, as: :json
+
+        expect(response.media_type).to eq "application/scim+json"
+      end
+
+      it "is successful with valid credentials" do
+        expect(company.groups.count).to eq 0
+
+        post :create, params: {
+          displayName: "NewGroup",
+        }, as: :json
+
+        expect(response.status).to eq 201
+        expect(company.groups.count).to eq 1
+        group = company.groups.first
+        expect(group.persisted?).to eq true
+        expect(group.name).to eq "NewGroup"
+      end
+
+      it "ignores unconfigured params" do
+        post :create, params: {
+          displayName: "NewGroup",
+          rank: "Jedi"
+        }, as: :json
+
+        expect(response.status).to eq 201
+        expect(company.groups.count).to eq 1
+      end
+
+      # it "returns 422 if required params are missing" do
+      #   post :create, params: {
+      #     dummy: :foo
+      #   }, as: :json
+
+      #   expect(response.status).to eq 422
+      #   expect(company.groups.count).to eq 0
+      # end
+
+      it "returns 201 if user already exists and updates user" do
+        create(:group, name: "NotNewGroup", company: company)
+
+        post :create, params: {
+          displayName: "NotNewGroup",
+        }, as: :json
+
+        expect(response.status).to eq 201
+        expect(company.groups.count).to eq 1
+        expect(company.groups.first.name).to eq "NotNewGroup"
+      end
+
+      it "returns 409 if user already exists and config.scim_user_prevent_update_on_create is set to true" do
+        allow(ScimRails.config).to receive(:scim_user_prevent_update_on_create).and_return(true)
+        create(:group, name: "NotNewGroup", company: company)
+
+        post :create, params: {
+          displayName: "NotNewGroup",
+        }, as: :json
+
+        expect(response.status).to eq 409
+        expect(company.groups.count).to eq 1
+      end
+
+      it "creates and archives inactive user" do
+        post :create, params: {
+          displayName: "NotNewGroup",
+          active: "false"
+        }, as: :json
+
+        expect(response.status).to eq 201
+        expect(company.groups.count).to eq 1
+        group = company.groups.first
+        expect(group.archived?).to eq true
+      end
+    end
+  end
+
   describe "put_update"
   describe "patch_update"
 end

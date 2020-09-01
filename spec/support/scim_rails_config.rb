@@ -18,10 +18,17 @@ ScimRails.configure do |config|
   config.user_deprovision_method = :archive!
   config.user_reprovision_method = :unarchive!
 
+  config.group_deprovision_method = :archive!
+  config.group_reprovision_method = :unarchive!
+
   config.mutable_user_attributes = [
     :first_name,
     :last_name,
     :email
+  ]
+
+  config.mutable_group_attributes = [
+    :name
   ]
 
   config.queryable_user_attributes = {
@@ -45,6 +52,10 @@ ScimRails.configure do |config|
         value: :email
       }
     ]
+  }
+
+  config.mutable_group_attributes_schema = {
+    displayName: :name
   }
 
   config.user_schema = {

@@ -18,6 +18,7 @@ module ScimRails
     attr_writer \
       :basic_auth_model,
       :mutable_user_attributes_schema,
+      :mutable_group_attributes_schema,
       :scim_users_model,
       :scim_groups_model
 
@@ -26,6 +27,7 @@ module ScimRails
       :basic_auth_model_searchable_attribute,
       :group_schema,
       :mutable_user_attributes,
+      :mutable_group_attributes,
       :on_error,
       :queryable_user_attributes,
       :queryable_group_attributes,
@@ -39,6 +41,8 @@ module ScimRails
       :user_attributes,
       :user_deprovision_method,
       :user_reprovision_method,
+      :group_deprovision_method,
+      :group_reprovision_method,
       :user_schema
 
     def initialize
@@ -54,6 +58,10 @@ module ScimRails
 
     def mutable_user_attributes_schema
       @mutable_user_attributes_schema || @user_schema
+    end
+
+    def mutable_group_attributes_schema
+      @mutable_group_attributes_schema || @group_schema
     end
 
     def basic_auth_model
