@@ -49,6 +49,12 @@ ScimRails.configure do |config|
   # Method called on user model to reprovision a user.
   config.user_reprovision_method = :unarchive!
 
+  # Method called on group model to deprovision a group.
+  # config.group_deprovision_method = :archive!
+
+  # Method called on group model to reprovision a group.
+  # config.group_reprovision_method = :unarchive!
+
   # Hash of queryable attribtues on the user model. If
   # the attribute is not listed in this hash it cannot
   # be queried by this Gem. The structure of this hash
@@ -73,6 +79,10 @@ ScimRails.configure do |config|
     :email
   ]
 
+  # config.mutable_group_attributes = [
+  #   :name
+  # ]
+
   # Hash of mutable attributes. This object is the map
   # for this Gem to figure out where to look in a SCIM
   # response for mutable values. This object should
@@ -88,6 +98,10 @@ ScimRails.configure do |config|
         value: :email
       }
     ]
+  }
+
+  config.mutable_group_attributes_schema = {
+    displayName: :name
   }
 
   # Hash of SCIM structure for a user schema. This object
