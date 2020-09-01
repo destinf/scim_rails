@@ -302,6 +302,291 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
     end
   end
 
-  describe "put_update"
-  describe "patch_update"
+  describe "put update" do
+    let(:company) { create(:company) }
+
+    context "when unauthorized" do
+      it "returns scim+json content type" do
+        put :put_update, params: { id: 1 }, as: :json
+
+        expect(response.media_type).to eq "application/scim+json"
+      end
+
+      it "fails with no credentials" do
+        put :put_update, params: { id: 1 }, as: :json
+
+        expect(response.status).to eq 401
+      end
+
+      it "fails with invalid credentials" do
+        request.env['HTTP_AUTHORIZATION'] = ActionController::HttpAuthentication::Basic.encode_credentials("unauthorized","123456")
+
+        put :put_update, params: { id: 1 }, as: :json
+
+        expect(response.status).to eq 401
+      end
+    end
+
+    context "when authorized" do
+      let!(:group) { create(:group, id: 1, company: company) }
+
+      before :each do
+        http_login(company)
+      end
+
+      it "returns scim+json content type" do
+        put :put_update, params: put_params, as: :json
+
+        expect(response.media_type).to eq "application/scim+json"
+      end
+
+      it "is successful with with valid credentials" do
+        put :put_update, params: put_params, as: :json
+        expect(response.status).to eq 200
+      end
+
+      it "deprovisions an active record" do
+        request.content_type = "application/scim+json"
+        put :put_update, params: put_params(active: false), as: :json
+
+        expect(response.status).to eq 200
+        expect(group.reload.active?).to eq false
+      end
+
+      it "reprovisions an inactive record" do
+        group.archive!
+        expect(group.reload.active?).to eq false
+        request.content_type = "application/scim+json"
+        put :put_update, params: put_params(active: true), as: :json
+
+        expect(response.status).to eq 200
+        expect(group.reload.active?).to eq true
+      end
+
+      it "returns :not_found for id that cannot be found" do
+        get :put_update, params: { id: "fake_id" }, as: :json
+
+        expect(response.status).to eq 404
+      end
+
+      it "returns :not_found for a correct id but unauthorized company" do
+        new_company = create(:company)
+        create(:group, company: new_company, id: 1000)
+
+        get :put_update, params: { id: 1000 }, as: :json
+
+        expect(response.status).to eq 404
+      end
+
+      xit "is returns 422 with incomplete request" do
+        put :put_update, params: {
+          id: 1,
+          groupName: "test@example.com",
+          emails: [
+            {
+              value: "test@example.com"
+            },
+          ],
+          active: "true"
+        }, as: :json
+
+        expect(response.status).to eq 422
+      end
+    end
+  end
+
+
+  describe "patch update" do
+    let(:company) { create(:company) }
+
+    context "when unauthorized" do
+      it "returns scim+json content type" do
+        patch :patch_update, params: patch_params(id: 1), as: :json
+
+        expect(response.media_type).to eq "application/scim+json"
+      end
+
+      it "fails with no credentials" do
+        patch :patch_update, params: patch_params(id: 1), as: :json
+
+        expect(response.status).to eq 401
+      end
+
+      it "fails with invalid credentials" do
+        request.env['HTTP_AUTHORIZATION'] = ActionController::HttpAuthentication::Basic.encode_credentials("unauthorized","123456")
+
+        patch :patch_update, params: patch_params(id: 1), as: :json
+
+        expect(response.status).to eq 401
+      end
+    end
+
+    context "when authorized" do
+      let!(:group) { create(:group, id: 1, company: company) }
+
+      before :each do
+        http_login(company)
+      end
+
+      it "returns scim+json content type" do
+        patch :patch_update, params: patch_params(id: 1), as: :json
+
+        expect(response.media_type).to eq "application/scim+json"
+      end
+
+      it "is successful with valid credentials" do
+        patch :patch_update, params: patch_params(id: 1), as: :json
+        expect(response.status).to eq 200
+      end
+
+      it "returns :not_found for id that cannot be found" do
+        get :patch_update, params: patch_params(id: "fake_id"), as: :json
+
+        expect(response.status).to eq 404
+      end
+
+      it "returns :not_found for a correct id but unauthorized company" do
+        new_company = create(:company)
+        create(:group, company: new_company, id: 1000)
+
+        get :patch_update, params: patch_params(id: 1000), as: :json
+
+        expect(response.status).to eq 404
+      end
+
+      it "successfully archives group" do
+        expect(company.groups.count).to eq 1
+        group = company.groups.first
+        expect(group.archived?).to eq false
+
+        patch :patch_update, params: patch_params(id: 1), as: :json
+
+        expect(response.status).to eq 200
+        expect(company.groups.count).to eq 1
+        group.reload
+        expect(group.archived?).to eq true
+      end
+
+      it "successfully restores group" do
+        expect(company.groups.count).to eq 1
+        group = company.groups.first.tap(&:archive!)
+        expect(group.archived?).to eq true
+
+        patch :patch_update, params: patch_params(id: 1,  active: true), as: :json
+
+        expect(response.status).to eq 200
+        expect(company.groups.count).to eq 1
+        group.reload
+        expect(group.archived?).to eq false
+      end
+
+      it "is case insensetive for op value" do
+        # Note, this is for backward compatibility. op should always
+        # be lower case and support for case insensitivity will be removed
+        patch :patch_update, params: {
+          id: 1,
+          Operations: [
+            {
+              op: "Replace",
+              value: {
+                active: false
+              }
+            }
+          ]
+        }, as: :json
+
+        expect(response.status).to eq 200
+      end
+
+      it "throws an error for non status updates" do
+        patch :patch_update, params: {
+          id: 1,
+          Operations: [
+            {
+              op: "replace",
+              value: {
+                name: {
+                  givenName: "Francis"
+                }
+              }
+            }
+          ]
+        }, as: :json
+
+        expect(response.status).to eq 422
+        response_body = JSON.parse(response.body)
+        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
+      end
+
+      it "returns 422 when value is not an object" do
+        patch :patch_update, params: {
+          id: 1,
+          Operations: [
+            {
+              op: "replace",
+              path: "displayName",
+              value: "Francis"
+            }
+          ]
+        }
+
+        expect(response.status).to eq 422
+        response_body = JSON.parse(response.body)
+        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
+      end
+
+      it "returns 422 when value is missing" do
+        patch :patch_update, params: {
+          id: 1,
+          Operations: [
+            {
+              op: "replace"
+            }
+          ]
+        }, as: :json
+
+        expect(response.status).to eq 422
+        response_body = JSON.parse(response.body)
+        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
+      end
+
+      it "returns 422 operations key is missing" do
+        patch :patch_update, params: {
+          id: 1,
+          Foobars: [
+            {
+              op: "replace"
+            }
+          ]
+        }, as: :json
+
+        expect(response.status).to eq 422
+        response_body = JSON.parse(response.body)
+        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
+      end
+    end
+  end
+
+  def patch_params(id:, active: false)
+    {
+      id: id,
+      displayName: "Patch Test Group",
+      Operations: [
+        {
+          op: "replace",
+          value: {
+            active: active
+          }
+        }
+      ]
+    }
+  end
+
+  def put_params(active: true)
+    {
+      id: 1,
+      displayName: "Test Group",
+      active: active
+    }
+  end
 end
