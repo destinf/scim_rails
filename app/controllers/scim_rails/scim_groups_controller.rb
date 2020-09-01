@@ -51,6 +51,21 @@ module ScimRails
       json_scim_response(object: group, status: :created, schema: SCHEMA)
     end
 
+    def put_update
+      group = @company.public_send(ScimRails.config.scim_groups_scope).find(params[:id])
+      update_status(group) unless put_active_param.nil?
+      group.update!(permitted_group_params)
+      json_scim_response(object: group, schema: SCHEMA)
+    end
+
+    # TODO: PATCH will only deprovision or reprovision groups.
+    # This will work just fine for Okta but is not SCIM compliant.
+    def patch_update
+      group = @company.public_send(ScimRails.config.scim_groups_scope).find(params[:id])
+      update_status(group)
+      json_scim_response(object: group, schema: SCHEMA)
+    end
+
     private
 
     def permitted_group_params
@@ -112,6 +127,26 @@ module ScimRails
         end
         nil
       end
+    end
+
+    def patch_active_param
+      handle_invalid = lambda do
+        raise ScimRails::ExceptionHandler::UnsupportedPatchRequest
+      end
+
+      operations = params["Operations"] || {}
+
+      valid_operation = operations.find(handle_invalid) do |operation|
+        valid_patch_operation?(operation)
+      end
+
+      valid_operation.dig("value", "active")
+    end
+
+    def valid_patch_operation?(operation)
+      operation["op"].casecmp("replace") &&
+        operation["value"] &&
+        [true, false].include?(operation["value"]["active"])
     end
   end
 end
