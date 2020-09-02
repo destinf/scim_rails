@@ -73,7 +73,7 @@ module ScimRails
     end
 
     def scim_groups_model
-      @scim_groups_model.constantize
+      @scim_groups_model&.constantize
     end
   end
 end
