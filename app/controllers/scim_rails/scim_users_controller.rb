@@ -29,7 +29,6 @@ module ScimRails
     end
 
     def create
-      binding.pry
       if ScimRails.config.scim_user_prevent_update_on_create
         user_params = permitted_user_params.reject {|k,v| v.class == Hash}
         user = @company.public_send(ScimRails.config.scim_users_scope).create!(user_params)

@@ -16,9 +16,9 @@ module ScimRails
           json: list_response(object, counts, schema),
           status: status,
           content_type: CONTENT_TYPE
-      when "show", "create", "put_update", "patch_update"
+      when "show", "create", "put_update", "patch_update", "update"
         render \
-          json: object_response(object, schema),
+          json: object.is_a?(Array) ? list_objects(object, schema) : object_response(object, schema),
           status: status,
           content_type: CONTENT_TYPE
       end
@@ -51,7 +51,7 @@ module ScimRails
     def object_response(object, schema)
       find_value(object, schema)
     end
-      
+
     # `find_value` is a recursive method that takes a "user" and a
     # "user schema" and replaces any symbols in the schema with the
     # corresponding value from the user. Given a schema with symbols,
@@ -70,6 +70,8 @@ module ScimRails
           find_value(user, value)
         end
       when Symbol
+        if object == :name
+        end
         user.public_send(object)
       else
         object

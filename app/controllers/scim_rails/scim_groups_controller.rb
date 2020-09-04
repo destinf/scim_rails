@@ -51,6 +51,12 @@ module ScimRails
       json_scim_response(object: group, status: :created, schema: SCHEMA)
     end
 
+    def update
+      group = @company.public_send(ScimRails.config.scim_groups_scope).find(params[:id])
+      results = parse_operations(params['Operations'], group).flatten.compact
+      json_scim_response(object: group, schema: SCHEMA)
+    end
+
     def put_update
       group = @company.public_send(ScimRails.config.scim_groups_scope).find(params[:id])
       update_status(group) unless put_active_param.nil?
@@ -93,7 +99,7 @@ module ScimRails
       end
     end
 
-    def find_value_for(attribute)
+    def find_value_for(attribute, params = params)
       params.dig(*path_for(attribute))
     end
 
@@ -147,6 +153,48 @@ module ScimRails
       operation["op"].casecmp("replace") &&
         operation["value"] &&
         [true, false].include?(operation["value"]["active"])
+    end
+
+    def parse_operations(operations, target)
+      operations.map do |operation|
+        parse_operation(operation, target)
+      end
+    end
+
+    def parse_operation(operation, target)
+      case operation['op']
+      when 'replace'
+        attributes = ScimRails.config.mutable_group_attributes.each.with_object({}) do |attribute, hash|
+          hash[attribute] = find_value_for(attribute, operation['value'])
+        end
+        target.update!(attributes)
+        target
+      when 'add'
+        # Assume for this use case that only users can be added to groups
+        raise ScimRails::ExceptionHandler::UnsupportedPatchRequest unless operation['path'] == 'members'
+        operation['value'].map do |value|
+          user_id = value['value']
+          user = ScimRails.config.scim_users_model.find(user_id)
+          target.public_send(ScimRails.config.scim_users_scope) << user
+        end
+      when 'remove'
+        user = find_user(operation['path'])
+        target.public_send(ScimRails.config.scim_users_scope).delete(user)
+      else
+        raise ScimRails::ExceptionHandler::UnsupportedPatchRequest
+      end
+    end
+
+    def find_user(path)
+      match = parse_path(path)
+      if match[:member] != 'members' || match[:attribute] != 'value' || match[:operator] != 'eq'
+        return nil
+      end
+      ScimRails.config.scim_users_model.find(match[:target])
+    end
+
+    def parse_path(path)
+      path.match(/\A(?<member>.*)\[(?<attribute>\w+) (?<operator>\w+) (?<target>"?[\w|-]+"?)\]\Z/)
     end
   end
 end
