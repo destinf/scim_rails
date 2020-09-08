@@ -302,6 +302,162 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
     end
   end
 
+  describe '#update' do
+    let(:company) { create(:company) }
+    let(:group) { create(:group, company: company)}
+
+    before :each do
+      http_login(company)
+    end
+
+    context 'when updating a specific group name' do
+      let(:replace_request_params) do
+        {
+          id: group.id,
+          Operations: [{
+            op: 'replace',
+            value: {
+              displayName: 'New Group Name'
+            }
+          }]
+      
+        }
+      end
+
+      it 'successfully replaces the name' do
+        patch :update, params: replace_request_params, as: :json
+        expect(response).to have_http_status(:ok)
+        expect(group.reload.name).to eq('New Group Name')
+      end
+
+      context 'when a group name already exists' do
+        let(:group2) { create(:group, company: company, name: 'group2name') }
+      
+        it 'fails to change the group name' do
+          params = {
+            id: group2.id,
+            Operations: [{
+              op: 'replace',
+              value: {
+                displayName: group.name
+              }
+            }]
+          }
+          patch :update, params: params, as: :json
+          expect(response).to have_http_status(:conflict)
+          expect(group2.reload.name).to eq('group2name')
+        end
+      end
+    end
+
+    context 'when updating specific group membership' do
+      let(:params) do
+        {
+          "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+    "Operations": [{
+          "op": "remove",
+          "path": "members[value eq \"89bb1940-b905-4575-9e7f-6f887cfb368e\"]"
+        },
+        {
+          "op": "add",
+          "path": "members",
+          "value": [{
+              "value": "23a35c27-23d3-4c03-b4c5-6443c09e7173",
+              "display": "test.user@okta.local"
+        }]
+    }]
+        }            
+      end
+
+      let(:user) { create(:user, company: company) }
+      let(:user2) { create(:user, company: company) }
+
+      it 'can remove members from a group' do
+        group.users << user
+        expect(group.users.count).to eq(1)
+
+        params = {
+          id: group.id,
+          schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+          Operations: [{
+            op: 'remove',
+            path: "members[value eq #{user.id}]"
+          }]
+        }
+
+        patch :update, params: params, as: :json
+        expect(group.reload.users.count).to eq(0)
+      end
+
+      it 'can add members to a group' do
+        params = {
+          id: group.id,
+          schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+          Operations: [{
+            op: 'add',
+            path: 'members',
+            value: [{
+              value: user2.id.to_s,
+              display: user2.email
+            }]
+          }]
+        }
+        expect(group.users.count).to eq(0)
+        patch :update, params: params, as: :json
+        expect(group.users.count).to eq(1)
+      end
+
+
+      it 'can remove and add members to a group' do
+        params = {
+          id: group.id,
+          schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+          Operations: [{
+            op: 'remove',
+            path: "members[value eq #{user.id}]"
+          },
+          {
+            op: 'add',
+            path: 'members',
+            value: [{
+              value: user2.id.to_s,
+              display: user2.email
+            }]
+          }]
+        }
+        
+        patch :update, params: params, as: :json
+        expect(group.users.count).to eq(1)
+        expect(group.users).to include(user2)
+      end
+    end
+  end
+
+  describe "delete" do
+    let(:company) { create(:company) }
+    let(:group) { create(:group, company: company) }
+
+    before :each do
+      http_login(company)
+    end
+
+    it "deletes a group" do
+      delete :destroy, params: { id: group.id }, as: :json
+      expect(company.reload.groups.count).to eq(0)
+    end
+
+    it "returns an empty response" do
+      delete :destroy, params: { id: group.id }, as: :json
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "fails if no group exists" do
+      expect(company.groups.count).to eq(0)
+      delete :destroy, params: { id: 1 }, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
+  end
+
   describe "put update" do
     let(:company) { create(:company) }
 
