@@ -57,19 +57,9 @@ module ScimRails
       json_scim_response(object: group, schema: SCHEMA)
     end
 
-    def put_update
+    def destroy
       group = @company.public_send(ScimRails.config.scim_groups_scope).find(params[:id])
-      update_status(group) unless put_active_param.nil?
-      group.update!(permitted_group_params)
-      json_scim_response(object: group, schema: SCHEMA)
-    end
-
-    # TODO: PATCH will only deprovision or reprovision groups.
-    # This will work just fine for Okta but is not SCIM compliant.
-    def patch_update
-      group = @company.public_send(ScimRails.config.scim_groups_scope).find(params[:id])
-      update_status(group)
-      json_scim_response(object: group, schema: SCHEMA)
+      group.delete
     end
 
     private

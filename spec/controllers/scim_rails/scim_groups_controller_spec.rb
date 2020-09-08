@@ -309,7 +309,7 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
     before :each do
       http_login(company)
     end
-  
+
     context 'when updating a specific group name' do
       let(:replace_request_params) do
         {
@@ -389,6 +389,25 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
         expect(group.reload.users.count).to eq(0)
       end
 
+      it 'can add members to a group' do
+        params = {
+          id: group.id,
+          schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+          Operations: [{
+            op: 'add',
+            path: 'members',
+            value: [{
+              value: user2.id.to_s,
+              display: user2.email
+            }]
+          }]
+        }
+        expect(group.users.count).to eq(0)
+        patch :update, params: params, as: :json
+        expect(group.users.count).to eq(1)
+      end
+
+
       it 'can remove and add members to a group' do
         params = {
           id: group.id,
@@ -409,9 +428,34 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
         
         patch :update, params: params, as: :json
         expect(group.users.count).to eq(1)
+        expect(group.users).to include(user2)
       end
     end
+  end
 
+  describe "delete" do
+    let(:company) { create(:company) }
+    let(:group) { create(:group, company: company) }
+
+    before :each do
+      http_login(company)
+    end
+
+    it "deletes a group" do
+      delete :destroy, params: { id: group.id }, as: :json
+      expect(company.reload.groups.count).to eq(0)
+    end
+
+    it "returns an empty response" do
+      delete :destroy, params: { id: group.id }, as: :json
+      expect(response).to have_http_status(:no_content)
+    end
+
+    it "fails if no group exists" do
+      expect(company.groups.count).to eq(0)
+      delete :destroy, params: { id: 1 }, as: :json
+      expect(response).to have_http_status(:not_found)
+    end
   end
 
   describe "put update" do
