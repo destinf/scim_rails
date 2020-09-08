@@ -89,8 +89,9 @@ module ScimRails
       end
     end
 
-    def find_value_for(attribute)
-      params.dig(*path_for(attribute))
+    def find_value_for(attribute, hash = nil)
+      hash ||= params
+      hash.dig(*path_for(attribute))
     end
 
     def put_active_param

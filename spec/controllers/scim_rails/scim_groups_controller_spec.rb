@@ -305,35 +305,50 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
   describe '#update' do
     let(:company) { create(:company) }
     let(:group) { create(:group, company: company)}
-
-    before :each do
-      http_login(company)
+    let(:replace_request_params) do
+      {
+        id: group.id,
+        Operations: [{
+          op: 'replace',
+          value: {
+            displayName: 'New Group Name'
+          }
+        }]
+      }
     end
 
-    context 'when updating a specific group name' do
-      let(:replace_request_params) do
-        {
-          id: group.id,
-          Operations: [{
-            op: 'replace',
-            value: {
-              displayName: 'New Group Name'
-            }
-          }]
-      
-        }
-      end
-
-      it 'successfully replaces the name' do
+    context "when unauthorized" do
+      it "returns scim+json content type" do
         patch :update, params: replace_request_params, as: :json
-        expect(response).to have_http_status(:ok)
-        expect(group.reload.name).to eq('New Group Name')
+        expect(response.media_type).to eq "application/scim+json"
       end
 
-      context 'when a group name already exists' do
-        let(:group2) { create(:group, company: company, name: 'group2name') }
-      
-        it 'fails to change the group name' do
+      it "fails with no credentials" do
+        patch :update, params: replace_request_params, as: :json
+        expect(response.status).to eq 401
+      end
+
+      it "fails with invalid credentials" do
+        request.env['HTTP_AUTHORIZATION'] = ActionController::HttpAuthentication::Basic.encode_credentials("unauthorized","123456")
+        patch :update, params: replace_request_params, as: :json
+        expect(response.status).to eq 401
+      end
+    end
+
+    context "when authorized" do
+      before :each do
+        http_login(company)
+      end
+
+      describe "updating a group name" do
+        it 'successfully replaces the name' do
+          patch :update, params: replace_request_params, as: :json
+          expect(response).to have_http_status(:ok)
+          expect(group.reload.name).to eq('New Group Name')
+        end
+
+        it 'fails to change the group name when it already exists' do
+          group2 = create(:group, company: company, name: 'group2name')
           params = {
             id: group2.id,
             Operations: [{
@@ -346,89 +361,72 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
           patch :update, params: params, as: :json
           expect(response).to have_http_status(:conflict)
           expect(group2.reload.name).to eq('group2name')
-        end
-      end
-    end
+        end        
+      end        
 
-    context 'when updating specific group membership' do
-      let(:params) do
-        {
-          "schemas": ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-    "Operations": [{
-          "op": "remove",
-          "path": "members[value eq \"89bb1940-b905-4575-9e7f-6f887cfb368e\"]"
-        },
-        {
-          "op": "add",
-          "path": "members",
-          "value": [{
-              "value": "23a35c27-23d3-4c03-b4c5-6443c09e7173",
-              "display": "test.user@okta.local"
-        }]
-    }]
-        }            
-      end
-
-      let(:user) { create(:user, company: company) }
-      let(:user2) { create(:user, company: company) }
-
-      it 'can remove members from a group' do
-        group.users << user
-        expect(group.users.count).to eq(1)
-
-        params = {
-          id: group.id,
-          schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-          Operations: [{
-            op: 'remove',
-            path: "members[value eq #{user.id}]"
-          }]
-        }
-
-        patch :update, params: params, as: :json
-        expect(group.reload.users.count).to eq(0)
-      end
-
-      it 'can add members to a group' do
-        params = {
-          id: group.id,
-          schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-          Operations: [{
-            op: 'add',
-            path: 'members',
-            value: [{
-              value: user2.id.to_s,
-              display: user2.email
-            }]
-          }]
-        }
-        expect(group.users.count).to eq(0)
-        patch :update, params: params, as: :json
-        expect(group.users.count).to eq(1)
-      end
-
-
-      it 'can remove and add members to a group' do
-        params = {
-          id: group.id,
-          schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
-          Operations: [{
-            op: 'remove',
-            path: "members[value eq #{user.id}]"
-          },
-          {
-            op: 'add',
-            path: 'members',
-            value: [{
-              value: user2.id.to_s,
-              display: user2.email
-            }]
-          }]
-        }
+      describe "updating a group's membership" do
         
-        patch :update, params: params, as: :json
-        expect(group.users.count).to eq(1)
-        expect(group.users).to include(user2)
+        let(:user) { create(:user, company: company) }
+        let(:user2) { create(:user, company: company) }
+
+        it 'can remove members from a group' do
+          group.users << user
+          expect(group.users.count).to eq(1)
+
+          params = {
+            id: group.id,
+            schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            Operations: [{
+              op: 'remove',
+              path: "members[value eq #{user.id}]"
+            }]
+          }
+
+          patch :update, params: params, as: :json
+          expect(group.reload.users.count).to eq(0)
+        end
+
+        it 'can add members to a group' do
+          params = {
+            id: group.id,
+            schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            Operations: [{
+              op: 'add',
+              path: 'members',
+              value: [{
+                value: user2.id.to_s,
+                display: user2.email
+              }]
+            }]
+          }
+          expect(group.users.count).to eq(0)
+          patch :update, params: params, as: :json
+          expect(group.users.count).to eq(1)
+        end
+
+
+        it 'can remove and add members to a group' do
+          params = {
+            id: group.id,
+            schemas: ["urn:ietf:params:scim:api:messages:2.0:PatchOp"],
+            Operations: [{
+              op: 'remove',
+              path: "members[value eq #{user.id}]"
+            },
+            {
+              op: 'add',
+              path: 'members',
+              value: [{
+                value: user2.id.to_s,
+                display: user2.email
+              }]
+            }]
+          }
+        
+          patch :update, params: params, as: :json
+          expect(group.users.count).to eq(1)
+          expect(group.users).to include(user2)
+        end
       end
     end
   end
@@ -437,312 +435,44 @@ RSpec.describe ScimRails::ScimGroupsController, type: :controller do
     let(:company) { create(:company) }
     let(:group) { create(:group, company: company) }
 
-    before :each do
-      http_login(company)
-    end
+    context "when authorized" do
+      before :each do
+        http_login(company)
+      end
 
-    it "deletes a group" do
-      delete :destroy, params: { id: group.id }, as: :json
-      expect(company.reload.groups.count).to eq(0)
-    end
+      it "deletes a group" do
+        delete :destroy, params: { id: group.id }, as: :json
+        expect(company.reload.groups.count).to eq(0)
+      end
 
-    it "returns an empty response" do
-      delete :destroy, params: { id: group.id }, as: :json
-      expect(response).to have_http_status(:no_content)
-    end
+      it "returns an empty response" do
+        delete :destroy, params: { id: group.id }, as: :json
+        expect(response).to have_http_status(:no_content)
+      end
 
-    it "fails if no group exists" do
-      expect(company.groups.count).to eq(0)
-      delete :destroy, params: { id: 1 }, as: :json
-      expect(response).to have_http_status(:not_found)
+      it "fails if no group exists" do
+        expect(company.groups.count).to eq(0)
+        delete :destroy, params: { id: 1 }, as: :json
+        expect(response).to have_http_status(:not_found)
+      end
     end
-  end
-
-  describe "put update" do
-    let(:company) { create(:company) }
 
     context "when unauthorized" do
       it "returns scim+json content type" do
-        put :put_update, params: { id: 1 }, as: :json
-
+        delete :destroy, params: { id: group.id }, as: :json
         expect(response.media_type).to eq "application/scim+json"
       end
 
       it "fails with no credentials" do
-        put :put_update, params: { id: 1 }, as: :json
-
+        delete :destroy, params: { id: group.id }, as: :json
         expect(response.status).to eq 401
       end
 
       it "fails with invalid credentials" do
         request.env['HTTP_AUTHORIZATION'] = ActionController::HttpAuthentication::Basic.encode_credentials("unauthorized","123456")
-
-        put :put_update, params: { id: 1 }, as: :json
-
+        delete :destroy, params: { id: group.id }, as: :json
         expect(response.status).to eq 401
       end
     end
-
-    context "when authorized" do
-      let!(:group) { create(:group, id: 1, company: company) }
-
-      before :each do
-        http_login(company)
-      end
-
-      it "returns scim+json content type" do
-        put :put_update, params: put_params, as: :json
-
-        expect(response.media_type).to eq "application/scim+json"
-      end
-
-      it "is successful with with valid credentials" do
-        put :put_update, params: put_params, as: :json
-        expect(response.status).to eq 200
-      end
-
-      it "deprovisions an active record" do
-        request.content_type = "application/scim+json"
-        put :put_update, params: put_params(active: false), as: :json
-
-        expect(response.status).to eq 200
-        expect(group.reload.active?).to eq false
-      end
-
-      it "reprovisions an inactive record" do
-        group.archive!
-        expect(group.reload.active?).to eq false
-        request.content_type = "application/scim+json"
-        put :put_update, params: put_params(active: true), as: :json
-
-        expect(response.status).to eq 200
-        expect(group.reload.active?).to eq true
-      end
-
-      it "returns :not_found for id that cannot be found" do
-        get :put_update, params: { id: "fake_id" }, as: :json
-
-        expect(response.status).to eq 404
-      end
-
-      it "returns :not_found for a correct id but unauthorized company" do
-        new_company = create(:company)
-        create(:group, company: new_company, id: 1000)
-
-        get :put_update, params: { id: 1000 }, as: :json
-
-        expect(response.status).to eq 404
-      end
-
-      xit "is returns 422 with incomplete request" do
-        put :put_update, params: {
-          id: 1,
-          groupName: "test@example.com",
-          emails: [
-            {
-              value: "test@example.com"
-            },
-          ],
-          active: "true"
-        }, as: :json
-
-        expect(response.status).to eq 422
-      end
-    end
-  end
-
-
-  describe "patch update" do
-    let(:company) { create(:company) }
-
-    context "when unauthorized" do
-      it "returns scim+json content type" do
-        patch :patch_update, params: patch_params(id: 1), as: :json
-
-        expect(response.media_type).to eq "application/scim+json"
-      end
-
-      it "fails with no credentials" do
-        patch :patch_update, params: patch_params(id: 1), as: :json
-
-        expect(response.status).to eq 401
-      end
-
-      it "fails with invalid credentials" do
-        request.env['HTTP_AUTHORIZATION'] = ActionController::HttpAuthentication::Basic.encode_credentials("unauthorized","123456")
-
-        patch :patch_update, params: patch_params(id: 1), as: :json
-
-        expect(response.status).to eq 401
-      end
-    end
-
-    context "when authorized" do
-      let!(:group) { create(:group, id: 1, company: company) }
-
-      before :each do
-        http_login(company)
-      end
-
-      it "returns scim+json content type" do
-        patch :patch_update, params: patch_params(id: 1), as: :json
-
-        expect(response.media_type).to eq "application/scim+json"
-      end
-
-      it "is successful with valid credentials" do
-        patch :patch_update, params: patch_params(id: 1), as: :json
-        expect(response.status).to eq 200
-      end
-
-      it "returns :not_found for id that cannot be found" do
-        get :patch_update, params: patch_params(id: "fake_id"), as: :json
-
-        expect(response.status).to eq 404
-      end
-
-      it "returns :not_found for a correct id but unauthorized company" do
-        new_company = create(:company)
-        create(:group, company: new_company, id: 1000)
-
-        get :patch_update, params: patch_params(id: 1000), as: :json
-
-        expect(response.status).to eq 404
-      end
-
-      it "successfully archives group" do
-        expect(company.groups.count).to eq 1
-        group = company.groups.first
-        expect(group.archived?).to eq false
-
-        patch :patch_update, params: patch_params(id: 1), as: :json
-
-        expect(response.status).to eq 200
-        expect(company.groups.count).to eq 1
-        group.reload
-        expect(group.archived?).to eq true
-      end
-
-      it "successfully restores group" do
-        expect(company.groups.count).to eq 1
-        group = company.groups.first.tap(&:archive!)
-        expect(group.archived?).to eq true
-
-        patch :patch_update, params: patch_params(id: 1,  active: true), as: :json
-
-        expect(response.status).to eq 200
-        expect(company.groups.count).to eq 1
-        group.reload
-        expect(group.archived?).to eq false
-      end
-
-      it "is case insensetive for op value" do
-        # Note, this is for backward compatibility. op should always
-        # be lower case and support for case insensitivity will be removed
-        patch :patch_update, params: {
-          id: 1,
-          Operations: [
-            {
-              op: "Replace",
-              value: {
-                active: false
-              }
-            }
-          ]
-        }, as: :json
-
-        expect(response.status).to eq 200
-      end
-
-      it "throws an error for non status updates" do
-        patch :patch_update, params: {
-          id: 1,
-          Operations: [
-            {
-              op: "replace",
-              value: {
-                name: {
-                  givenName: "Francis"
-                }
-              }
-            }
-          ]
-        }, as: :json
-
-        expect(response.status).to eq 422
-        response_body = JSON.parse(response.body)
-        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
-      end
-
-      it "returns 422 when value is not an object" do
-        patch :patch_update, params: {
-          id: 1,
-          Operations: [
-            {
-              op: "replace",
-              path: "displayName",
-              value: "Francis"
-            }
-          ]
-        }
-
-        expect(response.status).to eq 422
-        response_body = JSON.parse(response.body)
-        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
-      end
-
-      it "returns 422 when value is missing" do
-        patch :patch_update, params: {
-          id: 1,
-          Operations: [
-            {
-              op: "replace"
-            }
-          ]
-        }, as: :json
-
-        expect(response.status).to eq 422
-        response_body = JSON.parse(response.body)
-        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
-      end
-
-      it "returns 422 operations key is missing" do
-        patch :patch_update, params: {
-          id: 1,
-          Foobars: [
-            {
-              op: "replace"
-            }
-          ]
-        }, as: :json
-
-        expect(response.status).to eq 422
-        response_body = JSON.parse(response.body)
-        expect(response_body.dig("schemas", 0)).to eq "urn:ietf:params:scim:api:messages:2.0:Error"
-      end
-    end
-  end
-
-  def patch_params(id:, active: false)
-    {
-      id: id,
-      displayName: "Patch Test Group",
-      Operations: [
-        {
-          op: "replace",
-          value: {
-            active: active
-          }
-        }
-      ]
-    }
-  end
-
-  def put_params(active: true)
-    {
-      id: 1,
-      displayName: "Test Group",
-      active: active
-    }
   end
 end
